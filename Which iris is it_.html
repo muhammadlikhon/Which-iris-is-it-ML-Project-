@@ -1,0 +1,870 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Which iris is it?</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@1,6..72,400;1,6..72,500&family=Schibsted+Grotesk:wght@400;500;700&display=swap">
+<style>
+:root {
+  --bg: #eef3f5;
+  --panel: #f9fbfc;
+  --ink: #0e2a47;
+  --muted: #53697d;
+  --line: #c7d4dd;
+  --soft: #dce6ec;
+  --c0: #d9980d;
+  --c1: #dc4f6a;
+  --c2: #7a58d4;
+  --font-ui: "Schibsted Grotesk", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-latin: "Newsreader", Georgia, "Times New Roman", serif;
+  color-scheme: light;
+  box-sizing: border-box;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0a2036;
+    --panel: #0e2a45;
+    --ink: #e6f0f7;
+    --muted: #92abc0;
+    --line: #25496a;
+    --soft: #163554;
+    --c0: #f2c14e;
+    --c1: #ff8aa0;
+    --c2: #b8a2ff;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0a2036;
+  --panel: #0e2a45;
+  --ink: #e6f0f7;
+  --muted: #92abc0;
+  --line: #25496a;
+  --soft: #163554;
+  --c0: #f2c14e;
+  --c1: #ff8aa0;
+  --c2: #b8a2ff;
+  color-scheme: dark;
+}
+html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+*, *::before, *::after { box-sizing: border-box; }
+[hidden] { display: none !important; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 400 16px/1.55 var(--font-ui);
+  -webkit-text-size-adjust: 100%;
+}
+:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+
+.wrap { max-width: 1120px; margin: 0 auto; padding: clamp(20px, 4vw, 52px) clamp(16px, 4vw, 40px) 56px; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.muted { color: var(--muted); }
+.small { font-size: .88rem; }
+.latin { font-family: var(--font-latin); font-style: italic; font-weight: 400; }
+.num { font-variant-numeric: tabular-nums; }
+
+h1 { font-size: clamp(2.3rem, 6.4vw, 3.9rem); line-height: 1; letter-spacing: -.035em; font-weight: 700; margin: 0 0 14px; }
+h2 { font-size: 1.45rem; line-height: 1.2; letter-spacing: -.015em; font-weight: 700; margin: 0 0 8px; }
+h3 { font-size: 1.05rem; font-weight: 700; margin: 0 0 4px; }
+p { margin: 0 0 10px; }
+.lede { color: var(--muted); max-width: 36rem; font-size: 1.08rem; margin-bottom: 0; }
+.hero { margin-bottom: clamp(22px, 4vw, 38px); }
+
+/* ---------- the lab: plot + controls ---------- */
+.lab { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(300px, 1fr); gap: clamp(22px, 3.5vw, 48px); align-items: start; }
+.plate { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px 14px 12px; }
+@media (min-width: 861px) { .plate { position: sticky; top: 16px; } }
+@media (max-width: 860px) { .lab { grid-template-columns: minmax(0, 1fr); } }
+
+.axes { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; margin-bottom: 10px; font-size: .92rem; color: var(--muted); }
+.axes label { display: inline-flex; align-items: center; gap: 8px; }
+select {
+  font: inherit; font-weight: 500; color: var(--ink); background: var(--bg);
+  border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px;
+}
+#plot { width: 100%; min-height: 240px; }
+#svg { display: block; width: 100%; height: auto; }
+.bg { fill: transparent; shape-rendering: crispEdges; }
+.bg.c0 { fill: var(--c0); } .bg.c1 { fill: var(--c1); } .bg.c2 { fill: var(--c2); }
+.bg.o1 { fill-opacity: .14; } .bg.o2 { fill-opacity: .27; } .bg.o3 { fill-opacity: .42; }
+/* Opaque pre-blended fills let neighbouring cells overlap without a seam or a mesh. */
+@supports (fill: color-mix(in srgb, red 50%, blue)) {
+  .bg.c0 { --cc: var(--c0); } .bg.c1 { --cc: var(--c1); } .bg.c2 { --cc: var(--c2); }
+  .bg.o1 { --oo: 15; } .bg.o2 { --oo: 28; } .bg.o3 { --oo: 44; }
+  .bg.c0, .bg.c1, .bg.c2 { fill: color-mix(in srgb, var(--cc) calc(var(--oo) * 1%), var(--panel)); fill-opacity: 1; }
+}
+.frame { fill: none; stroke: var(--line); }
+.gridline { stroke: var(--ink); stroke-opacity: .09; }
+.tick { fill: var(--muted); font: 400 12px var(--font-ui); }
+.axlab { fill: var(--ink); font: 500 13px var(--font-ui); }
+.pt.c0 { fill: var(--c0); } .pt.c1 { fill: var(--c1); } .pt.c2 { fill: var(--c2); }
+.pt-train { stroke: var(--panel); stroke-width: 1.2; }
+.pt-test { stroke: var(--ink); stroke-width: 1.2; }
+.mis { fill: none; stroke: var(--ink); stroke-width: 1.5; stroke-dasharray: 3 2; }
+.mk-cross { stroke: var(--ink); stroke-opacity: .4; stroke-dasharray: 3 3; }
+.mk-halo { fill: none; stroke: var(--panel); stroke-width: 6; }
+.mk-ring { fill: none; stroke: var(--ink); stroke-width: 2.5; }
+.mk-dot { fill: var(--ink); }
+
+.legend { list-style: none; display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 8px 0 8px; padding: 0; font-size: .85rem; color: var(--muted); }
+.legend li { display: inline-flex; align-items: center; gap: 6px; }
+.legend svg { color: var(--ink); flex: none; }
+.plate-note { font-size: .88rem; color: var(--muted); margin: 0; max-width: 46rem; }
+
+/* ---------- controls ---------- */
+.result { padding-bottom: 18px; margin-bottom: 18px; border-bottom: 1px solid var(--line); }
+.kicker { color: var(--muted); font-size: .92rem; margin: 0 0 2px; }
+.rname { display: flex; align-items: center; gap: 12px; font-size: clamp(2rem, 4.2vw, 2.6rem); line-height: 1.1; min-height: 1.2em; }
+.swatch { width: 14px; height: 14px; border-radius: 50%; flex: none; background: var(--soft); }
+.sure { font-weight: 500; margin: 6px 0 12px; }
+.bar { display: flex; height: 10px; border-radius: 5px; overflow: hidden; background: var(--soft); }
+.bar i { display: block; height: 100%; width: 0; transition: width .15s ease-out; }
+.bar i:nth-child(1) { background: var(--c0); }
+.bar i:nth-child(2) { background: var(--c1); }
+.bar i:nth-child(3) { background: var(--c2); }
+.probs { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 2px; }
+.probs li { display: grid; grid-template-columns: 12px 1fr auto; align-items: center; gap: 10px; font-size: .95rem; }
+.dot { width: 10px; height: 10px; border-radius: 50%; background: var(--soft); }
+.dot.c0 { background: var(--c0); } .dot.c1 { background: var(--c1); } .dot.c2 { background: var(--c2); }
+
+.controls h2 { margin-top: 0; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 14px; }
+.btn, .chip, .seg button {
+  font: inherit; font-weight: 500; color: var(--ink); background: transparent;
+  border: 1px solid var(--ink); border-radius: 999px; padding: 6px 14px; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 8px; line-height: 1.3;
+}
+.btn:hover, .chip:hover { background: var(--ink); color: var(--bg); }
+.btn.solid { background: var(--ink); color: var(--bg); }
+.btn.solid:hover { opacity: .88; }
+.link { font: inherit; color: var(--ink); background: none; border: 0; padding: 4px 2px; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+
+.slider { display: grid; grid-template-columns: 1fr auto; align-items: baseline; margin-bottom: 4px; }
+.slider label { font-weight: 500; }
+.slider output { color: var(--muted); font-variant-numeric: tabular-nums; }
+input[type=range] {
+  -webkit-appearance: none; appearance: none; grid-column: 1 / -1;
+  width: 100%; height: 28px; margin: 0; background: transparent; cursor: pointer;
+}
+input[type=range]::-webkit-slider-runnable-track { height: 3px; background: var(--line); border-radius: 2px; }
+input[type=range]::-moz-range-track { height: 3px; background: var(--line); border-radius: 2px; }
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 22px; height: 22px; margin-top: -9.5px; border-radius: 50%;
+  background: var(--ink); border: 4px solid var(--bg); box-shadow: 0 0 0 1px var(--ink);
+}
+input[type=range]::-moz-range-thumb {
+  width: 14px; height: 14px; border-radius: 50%;
+  background: var(--ink); border: 4px solid var(--bg); box-shadow: 0 0 0 1px var(--ink);
+}
+.testrow { margin: 6px 0 4px; }
+.note { min-height: 3em; margin: 8px 0 0; font-size: .93rem; }
+.modelrow { margin-top: 14px; padding-top: 16px; border-top: 1px solid var(--line); }
+.modelrow p { margin-bottom: 8px; }
+.seg { display: inline-flex; flex-wrap: wrap; gap: 8px; }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
+
+/* ---------- report ---------- */
+.report, .how { margin-top: clamp(40px, 7vw, 76px); padding-top: clamp(24px, 4vw, 40px); border-top: 1px solid var(--line); }
+.report { display: grid; grid-template-columns: minmax(0, .8fr) minmax(0, 1.7fr); gap: clamp(22px, 4vw, 56px); align-items: start; }
+@media (max-width: 860px) { .report { grid-template-columns: minmax(0, 1fr); } }
+.retrain { margin: 14px 0 10px; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
+.retrain .small { flex-basis: 100%; margin: 4px 0 0; }
+.block + .block { margin-top: 30px; }
+.scroll { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+th, td { text-align: left; padding: 9px 14px 9px 0; border-bottom: 1px solid var(--line); font-weight: 400; white-space: nowrap; }
+thead th { color: var(--muted); font-size: .88rem; }
+tbody th { font-weight: 500; }
+td.r, th.r { text-align: right; padding-right: 0; padding-left: 14px; }
+.badge { display: inline-block; margin-left: 6px; padding: 1px 10px; border-radius: 999px; background: var(--ink); color: var(--bg); font-size: .82rem; font-weight: 500; }
+tr.win td, tr.win th { font-weight: 700; }
+
+.exam { display: flex; flex-wrap: wrap; align-items: center; gap: 18px 40px; margin-top: 12px; }
+.big { font-size: clamp(2.8rem, 8vw, 4.2rem); line-height: 1; font-weight: 700; letter-spacing: -.04em; font-variant-numeric: tabular-nums; }
+table.cm { width: auto; border-collapse: separate; border-spacing: 3px; }
+table.cm th, table.cm td { border: 0; padding: 0; text-align: center; }
+table.cm thead th { font-size: .82rem; padding-bottom: 2px; }
+table.cm tbody th { text-align: right; padding-right: 8px; font-size: .95rem; }
+table.cm td {
+  width: clamp(52px, 11vw, 72px); height: clamp(44px, 9vw, 56px); border-radius: 4px; font-weight: 500;
+  background: color-mix(in srgb, var(--ink) calc(var(--v) * 80%), transparent);
+  border: 1px solid var(--line);
+}
+table.cm td.hi { color: var(--bg); border-color: transparent; }
+table.cm td.err { outline: 1.5px dashed var(--ink); outline-offset: -4px; }
+table.cm td.zero { color: var(--muted); }
+.cm-cap { margin: 8px 0 0; }
+
+/* ---------- how it works ---------- */
+.how { display: grid; grid-template-columns: minmax(0, .8fr) minmax(0, 1.7fr); gap: clamp(22px, 4vw, 56px); }
+@media (max-width: 860px) { .how { grid-template-columns: minmax(0, 1fr); } }
+.how ol { margin: 0; padding-left: 1.3em; display: grid; gap: 14px; max-width: 40rem; }
+.how li::marker { font-weight: 700; }
+.how li strong { font-weight: 700; }
+footer { margin-top: 40px; color: var(--muted); font-size: .88rem; max-width: 46rem; }
+
+@media (prefers-reduced-motion: reduce) { .bar i { transition: none; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="hero">
+    <h1>Which iris is it?</h1>
+    <p class="lede">Describe a flower with four measurements. A model trained on 150 labeled irises, right here in your browser, names the species and shows how sure it is.</p>
+  </header>
+
+  <noscript><p>This page trains a small machine learning model in your browser, so it needs JavaScript turned on.</p></noscript>
+
+  <main>
+    <section class="lab" aria-labelledby="lab-h">
+      <h2 id="lab-h" class="sr">Try the classifier</h2>
+
+      <div class="plate">
+        <div class="axes">
+          <label>Show <select id="axX" aria-label="Horizontal axis measurement"></select></label>
+          <label>against <select id="axY" aria-label="Vertical axis measurement"></select></label>
+        </div>
+        <div id="plot"><svg id="svg" role="img" aria-label="Scatter plot of the 150 irises with the model's predicted species shaded behind them and your flower marked"></svg></div>
+        <ul class="legend">
+          <li><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><circle cx="7" cy="7" r="4" fill="currentColor" fill-opacity=".55"/></svg>Training flower</li>
+          <li><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M7 1.5 12.5 7 7 12.5 1.5 7Z" fill="currentColor" fill-opacity=".55" stroke="currentColor"/></svg>Held-out test flower</li>
+          <li><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" stroke-dasharray="3 2"/></svg>Test flower the model got wrong</li>
+          <li><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="8" cy="8" r="2" fill="currentColor"/></svg>Your flower</li>
+        </ul>
+        <p class="plate-note">The shaded regions show what the model would answer at each spot if your other two measurements stay where the sliders put them. Darker means more certain.</p>
+      </div>
+
+      <div class="controls">
+        <div class="result">
+          <p class="kicker">The model says</p>
+          <div class="rname" id="rname" role="status"><span class="swatch" id="swatch"></span><span class="latin" id="rlatin">Training…</span></div>
+          <p class="sure num" id="rsure">Learning from 120 flowers.</p>
+          <div class="bar" id="rbar" aria-hidden="true"><i></i><i></i><i></i></div>
+          <ul class="probs" id="probs"></ul>
+        </div>
+
+        <h2>Your flower</h2>
+        <p class="muted small" style="margin:0">Measurements in centimeters. Drag a slider, or start from a typical flower.</p>
+        <div class="chips" id="chips"></div>
+        <div id="sliders"></div>
+        <div class="testrow"><button class="btn" id="testflower" type="button">Try a flower the model hasn't seen</button></div>
+        <p class="note" id="note" aria-live="polite"></p>
+
+        <div class="modelrow">
+          <p class="muted small">Model used for this prediction and the shaded map</p>
+          <div class="seg" id="seg" role="group" aria-label="Choose model"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="report" aria-labelledby="rep-h">
+      <div>
+        <h2 id="rep-h">How well does it work?</h2>
+        <p>Both models were trained just now on your device. Every score below is measured on flowers the model did not learn from.</p>
+        <div class="retrain">
+          <button class="btn solid" id="retrain" type="button">Try a different split</button>
+          <button class="link" id="reset" type="button" hidden>Back to split 42</button>
+          <p class="muted small" id="trainMeta" aria-live="polite"></p>
+        </div>
+        <p class="muted small">With only 30 test flowers, one mistake moves accuracy by about 3 points, so scores shift from split to split.</p>
+      </div>
+
+      <div>
+        <div class="block">
+          <h3>Picking a model</h3>
+          <p>Each model is trained and tested five times on different slices of the 120 training flowers. The higher average wins.</p>
+          <div class="scroll">
+            <table>
+              <thead><tr><th scope="col">Model</th><th scope="col" class="r">Accuracy</th><th scope="col" class="r">Spread</th></tr></thead>
+              <tbody id="cvBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="block">
+          <h3>Final exam</h3>
+          <p id="examLead">The winner predicts 30 flowers it has never seen.</p>
+          <div class="exam">
+            <div>
+              <div class="big" id="acc">–</div>
+              <div class="muted small" id="accSub"></div>
+            </div>
+            <div>
+              <table class="cm" id="cm" aria-label="Confusion matrix"></table>
+              <p class="muted small cm-cap">True species down the side, the model's answer across the top. Dashed boxes are mistakes.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="block">
+          <h3>Species by species</h3>
+          <div class="scroll">
+            <table>
+              <thead><tr><th scope="col">Species</th><th scope="col" class="r">Precision</th><th scope="col" class="r">Recall</th><th scope="col" class="r">F1</th><th scope="col" class="r">Flowers</th></tr></thead>
+              <tbody id="pcBody"></tbody>
+            </table>
+          </div>
+          <p class="muted small" style="margin-top:10px">Precision: of the flowers the model called this species, how many were right. Recall: of the real flowers of this species, how many the model found. F1 blends the two.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="how" aria-labelledby="how-h">
+      <h2 id="how-h">What happens when you open this page</h2>
+      <ol>
+        <li><strong>Split the flowers.</strong> 120 go to training and 30 are locked away for the final exam, with the same mix of species in each group.</li>
+        <li><strong>Compare two models.</strong> Logistic regression draws smooth boundaries between species. A random forest of 100 decision trees votes on each flower. Five-fold cross-validation scores both without touching the locked-away flowers.</li>
+        <li><strong>Take the exam once.</strong> The winner predicts the 30 held-out flowers, and the results above are what it got right and wrong.</li>
+        <li><strong>Predict your flower.</strong> Your four measurements go into the trained model, which returns a probability for each species.</li>
+      </ol>
+    </section>
+  </main>
+
+  <footer>
+    Data: Fisher's Iris dataset, 150 flowers and four measurements each. Everything runs as plain JavaScript on this page, with no server and no libraries. It is a port of a Python and scikit-learn project, so scores can differ slightly from the Python version.
+  </footer>
+</div>
+
+<script>
+/* Iris ML in plain JavaScript: split, scale, logistic regression, random forest,
+   cross-validation and evaluation. No dependencies, no DOM. */
+(function (root) {
+  "use strict";
+
+  const K = 3; // number of species
+
+  // ---------- small helpers ----------
+  function mulberry32(a) {
+    return function () {
+      a |= 0; a = (a + 0x6d2b79f5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  function shuffle(arr, rnd) {
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(rnd() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+  }
+  const argmax = (a) => a.indexOf(Math.max(...a));
+  const mean = (a) => a.reduce((s, v) => s + v, 0) / a.length;
+  const std = (a) => { const m = mean(a); return Math.sqrt(mean(a.map((v) => (v - m) ** 2))); };
+  const dot = (a, b) => { let s = 0; for (let i = 0; i < a.length; i++) s += a[i] * b[i]; return s; };
+
+  function softmax(z) {
+    const m = Math.max(...z);
+    const e = z.map((v) => Math.exp(v - m));
+    const s = e.reduce((a, b) => a + b, 0);
+    return e.map((v) => v / s);
+  }
+
+  // ---------- splitting ----------
+  // Stratified: every species keeps the same share in train and test.
+  function stratifiedSplit(y, testFrac, rnd) {
+    const byClass = Array.from({ length: K }, () => []);
+    y.forEach((c, i) => byClass[c].push(i));
+    const train = [], test = [];
+    byClass.forEach((idx) => {
+      shuffle(idx, rnd);
+      const nTest = Math.round(idx.length * testFrac);
+      test.push(...idx.slice(0, nTest));
+      train.push(...idx.slice(nTest));
+    });
+    return { train, test };
+  }
+
+  function stratifiedFolds(idxs, y, k, rnd) {
+    const folds = Array.from({ length: k }, () => []);
+    const byClass = Array.from({ length: K }, () => []);
+    idxs.forEach((i) => byClass[y[i]].push(i));
+    byClass.forEach((list) => {
+      shuffle(list, rnd);
+      list.forEach((i, n) => folds[n % k].push(i));
+    });
+    return folds;
+  }
+
+  // ---------- scaling ----------
+  function fitScaler(X) {
+    const n = X.length, d = X[0].length;
+    const mu = Array(d).fill(0), sd = Array(d).fill(0);
+    X.forEach((r) => r.forEach((v, j) => { mu[j] += v / n; }));
+    X.forEach((r) => r.forEach((v, j) => { sd[j] += (v - mu[j]) ** 2 / n; }));
+    for (let j = 0; j < d; j++) sd[j] = Math.sqrt(sd[j]) || 1;
+    return { transform: (r) => r.map((v, j) => (v - mu[j]) / sd[j]) };
+  }
+
+  // ---------- model 1: logistic regression (softmax, L2, gradient descent) ----------
+  function fitLogReg(X, y, opts) {
+    const { lr = 1.0, iters = 500, C = 1 } = opts || {};
+    const n = X.length, d = X[0].length;
+    const sc = fitScaler(X);
+    const Z = X.map(sc.transform);
+    const lambda = 1 / (C * n);
+    const W = Array.from({ length: K }, () => Array(d).fill(0));
+    const b = Array(K).fill(0);
+    for (let it = 0; it < iters; it++) {
+      const gW = Array.from({ length: K }, () => Array(d).fill(0));
+      const gb = Array(K).fill(0);
+      for (let i = 0; i < n; i++) {
+        const p = softmax(W.map((w, c) => b[c] + dot(w, Z[i])));
+        for (let c = 0; c < K; c++) {
+          const e = p[c] - (y[i] === c ? 1 : 0);
+          gb[c] += e / n;
+          for (let j = 0; j < d; j++) gW[c][j] += (e * Z[i][j]) / n;
+        }
+      }
+      for (let c = 0; c < K; c++) {
+        b[c] -= lr * gb[c];
+        for (let j = 0; j < d; j++) W[c][j] -= lr * (gW[c][j] + lambda * W[c][j]);
+      }
+    }
+    return { proba: (x) => softmax(W.map((w, c) => b[c] + dot(w, sc.transform(x)))) };
+  }
+
+  // ---------- model 2: random forest (bagged gini trees) ----------
+  function gini(counts, n) {
+    let s = 0;
+    for (let c = 0; c < counts.length; c++) { const p = counts[c] / n; s += p * p; }
+    return 1 - s;
+  }
+
+  function buildTree(X, y, idx, depth, rnd, o) {
+    const n = idx.length;
+    const counts = Array(K).fill(0);
+    idx.forEach((i) => counts[y[i]]++);
+    const leaf = { leaf: true, p: counts.map((c) => c / n) };
+    if (counts.some((c) => c === n) || depth >= o.maxDepth || n < 2) return leaf;
+
+    const feats = shuffle([0, 1, 2, 3], rnd).slice(0, o.maxFeatures);
+    let best = null;
+    for (const f of feats) {
+      const sorted = idx.slice().sort((a, b) => X[a][f] - X[b][f]);
+      const left = Array(K).fill(0), right = counts.slice();
+      for (let k = 0; k < n - 1; k++) {
+        const i = sorted[k];
+        left[y[i]]++; right[y[i]]--;
+        const v = X[i][f], next = X[sorted[k + 1]][f];
+        if (v === next) continue;
+        const nl = k + 1, nr = n - nl;
+        const score = (nl * gini(left, nl) + nr * gini(right, nr)) / n;
+        if (!best || score < best.score) best = { score, f, thr: (v + next) / 2 };
+      }
+    }
+    if (!best) return leaf;
+    const L = [], R = [];
+    idx.forEach((i) => (X[i][best.f] <= best.thr ? L : R).push(i));
+    if (!L.length || !R.length) return leaf;
+    return {
+      leaf: false, f: best.f, thr: best.thr,
+      left: buildTree(X, y, L, depth + 1, rnd, o),
+      right: buildTree(X, y, R, depth + 1, rnd, o),
+    };
+  }
+
+  function walk(node, x) {
+    while (!node.leaf) node = x[node.f] <= node.thr ? node.left : node.right;
+    return node.p;
+  }
+
+  function fitForest(X, y, rnd, opts) {
+    const { nTrees = 100, maxDepth = 12, maxFeatures = 2 } = opts || {};
+    const n = X.length;
+    const trees = [];
+    for (let t = 0; t < nTrees; t++) {
+      const boot = Array.from({ length: n }, () => Math.floor(rnd() * n));
+      trees.push(buildTree(X, y, boot, 0, rnd, { maxDepth, maxFeatures }));
+    }
+    return {
+      proba: (x) => {
+        const p = Array(K).fill(0);
+        for (const t of trees) { const q = walk(t, x); for (let c = 0; c < K; c++) p[c] += q[c]; }
+        return p.map((v) => v / nTrees);
+      },
+    };
+  }
+
+  // ---------- evaluation ----------
+  function confusion(truth, preds) {
+    const cm = Array.from({ length: K }, () => Array(K).fill(0));
+    truth.forEach((t, i) => cm[t][preds[i]]++);
+    return cm;
+  }
+
+  function perClass(cm) {
+    return cm.map((row, c) => {
+      const tp = row[c];
+      const support = row.reduce((a, b) => a + b, 0);
+      const predicted = cm.reduce((s, r) => s + r[c], 0);
+      const precision = predicted ? tp / predicted : 0;
+      const recall = support ? tp / support : 0;
+      const f1 = precision + recall ? (2 * precision * recall) / (precision + recall) : 0;
+      return { precision, recall, f1, support };
+    });
+  }
+
+  // ---------- the whole experiment (mirrors src/train.py) ----------
+  function runExperiment(X, y, seed) {
+    const rnd = mulberry32(seed);
+    const { train, test } = stratifiedSplit(y, 0.2, rnd);
+    const pick = (idx) => [idx.map((i) => X[i]), idx.map((i) => y[i])];
+
+    const factories = {
+      "Logistic regression": (Xt, yt) => fitLogReg(Xt, yt),
+      "Random forest": (Xt, yt) => fitForest(Xt, yt, rnd),
+    };
+
+    // 1. compare models with 5-fold cross-validation on the training set only
+    const folds = stratifiedFolds(train, y, 5, rnd);
+    const cv = {};
+    for (const [name, fit] of Object.entries(factories)) {
+      const accs = folds.map((fold, k) => {
+        const trIdx = folds.filter((_, j) => j !== k).flat();
+        const m = fit(...pick(trIdx));
+        let ok = 0;
+        fold.forEach((i) => { if (argmax(m.proba(X[i])) === y[i]) ok++; });
+        return ok / fold.length;
+      });
+      cv[name] = { mean: mean(accs), std: std(accs), folds: accs };
+    }
+
+    // 2. pick the best, fit every model on the full training set
+    const names = Object.keys(cv);
+    const best = names.reduce((a, b) => (cv[b].mean > cv[a].mean ? b : a), names[0]);
+    const models = {};
+    for (const [name, fit] of Object.entries(factories)) models[name] = fit(...pick(train));
+
+    // 3. score the winner once on the held-out test set
+    const preds = test.map((i) => argmax(models[best].proba(X[i])));
+    const truth = test.map((i) => y[i]);
+    const cm = confusion(truth, preds);
+    const correct = preds.filter((p, i) => p === truth[i]).length;
+
+    return {
+      seed, train, test, cv, best, models, preds, cm,
+      correct, accuracy: correct / test.length, perClass: perClass(cm),
+    };
+  }
+
+  root.IrisML = { runExperiment, argmax, mean, mulberry32 };
+  if (typeof module !== "undefined" && module.exports) module.exports = root.IrisML;
+})(typeof window !== "undefined" ? window : globalThis);
+
+</script>
+<script>
+(function () {
+  "use strict";
+  var ML = window.IrisML;
+  var RAW = [[5.1,3.5,1.4,0.2,0],[4.9,3.0,1.4,0.2,0],[4.7,3.2,1.3,0.2,0],[4.6,3.1,1.5,0.2,0],[5.0,3.6,1.4,0.2,0],[5.4,3.9,1.7,0.4,0],[4.6,3.4,1.4,0.3,0],[5.0,3.4,1.5,0.2,0],[4.4,2.9,1.4,0.2,0],[4.9,3.1,1.5,0.1,0],[5.4,3.7,1.5,0.2,0],[4.8,3.4,1.6,0.2,0],[4.8,3.0,1.4,0.1,0],[4.3,3.0,1.1,0.1,0],[5.8,4.0,1.2,0.2,0],[5.7,4.4,1.5,0.4,0],[5.4,3.9,1.3,0.4,0],[5.1,3.5,1.4,0.3,0],[5.7,3.8,1.7,0.3,0],[5.1,3.8,1.5,0.3,0],[5.4,3.4,1.7,0.2,0],[5.1,3.7,1.5,0.4,0],[4.6,3.6,1.0,0.2,0],[5.1,3.3,1.7,0.5,0],[4.8,3.4,1.9,0.2,0],[5.0,3.0,1.6,0.2,0],[5.0,3.4,1.6,0.4,0],[5.2,3.5,1.5,0.2,0],[5.2,3.4,1.4,0.2,0],[4.7,3.2,1.6,0.2,0],[4.8,3.1,1.6,0.2,0],[5.4,3.4,1.5,0.4,0],[5.2,4.1,1.5,0.1,0],[5.5,4.2,1.4,0.2,0],[4.9,3.1,1.5,0.2,0],[5.0,3.2,1.2,0.2,0],[5.5,3.5,1.3,0.2,0],[4.9,3.6,1.4,0.1,0],[4.4,3.0,1.3,0.2,0],[5.1,3.4,1.5,0.2,0],[5.0,3.5,1.3,0.3,0],[4.5,2.3,1.3,0.3,0],[4.4,3.2,1.3,0.2,0],[5.0,3.5,1.6,0.6,0],[5.1,3.8,1.9,0.4,0],[4.8,3.0,1.4,0.3,0],[5.1,3.8,1.6,0.2,0],[4.6,3.2,1.4,0.2,0],[5.3,3.7,1.5,0.2,0],[5.0,3.3,1.4,0.2,0],[7.0,3.2,4.7,1.4,1],[6.4,3.2,4.5,1.5,1],[6.9,3.1,4.9,1.5,1],[5.5,2.3,4.0,1.3,1],[6.5,2.8,4.6,1.5,1],[5.7,2.8,4.5,1.3,1],[6.3,3.3,4.7,1.6,1],[4.9,2.4,3.3,1.0,1],[6.6,2.9,4.6,1.3,1],[5.2,2.7,3.9,1.4,1],[5.0,2.0,3.5,1.0,1],[5.9,3.0,4.2,1.5,1],[6.0,2.2,4.0,1.0,1],[6.1,2.9,4.7,1.4,1],[5.6,2.9,3.6,1.3,1],[6.7,3.1,4.4,1.4,1],[5.6,3.0,4.5,1.5,1],[5.8,2.7,4.1,1.0,1],[6.2,2.2,4.5,1.5,1],[5.6,2.5,3.9,1.1,1],[5.9,3.2,4.8,1.8,1],[6.1,2.8,4.0,1.3,1],[6.3,2.5,4.9,1.5,1],[6.1,2.8,4.7,1.2,1],[6.4,2.9,4.3,1.3,1],[6.6,3.0,4.4,1.4,1],[6.8,2.8,4.8,1.4,1],[6.7,3.0,5.0,1.7,1],[6.0,2.9,4.5,1.5,1],[5.7,2.6,3.5,1.0,1],[5.5,2.4,3.8,1.1,1],[5.5,2.4,3.7,1.0,1],[5.8,2.7,3.9,1.2,1],[6.0,2.7,5.1,1.6,1],[5.4,3.0,4.5,1.5,1],[6.0,3.4,4.5,1.6,1],[6.7,3.1,4.7,1.5,1],[6.3,2.3,4.4,1.3,1],[5.6,3.0,4.1,1.3,1],[5.5,2.5,4.0,1.3,1],[5.5,2.6,4.4,1.2,1],[6.1,3.0,4.6,1.4,1],[5.8,2.6,4.0,1.2,1],[5.0,2.3,3.3,1.0,1],[5.6,2.7,4.2,1.3,1],[5.7,3.0,4.2,1.2,1],[5.7,2.9,4.2,1.3,1],[6.2,2.9,4.3,1.3,1],[5.1,2.5,3.0,1.1,1],[5.7,2.8,4.1,1.3,1],[6.3,3.3,6.0,2.5,2],[5.8,2.7,5.1,1.9,2],[7.1,3.0,5.9,2.1,2],[6.3,2.9,5.6,1.8,2],[6.5,3.0,5.8,2.2,2],[7.6,3.0,6.6,2.1,2],[4.9,2.5,4.5,1.7,2],[7.3,2.9,6.3,1.8,2],[6.7,2.5,5.8,1.8,2],[7.2,3.6,6.1,2.5,2],[6.5,3.2,5.1,2.0,2],[6.4,2.7,5.3,1.9,2],[6.8,3.0,5.5,2.1,2],[5.7,2.5,5.0,2.0,2],[5.8,2.8,5.1,2.4,2],[6.4,3.2,5.3,2.3,2],[6.5,3.0,5.5,1.8,2],[7.7,3.8,6.7,2.2,2],[7.7,2.6,6.9,2.3,2],[6.0,2.2,5.0,1.5,2],[6.9,3.2,5.7,2.3,2],[5.6,2.8,4.9,2.0,2],[7.7,2.8,6.7,2.0,2],[6.3,2.7,4.9,1.8,2],[6.7,3.3,5.7,2.1,2],[7.2,3.2,6.0,1.8,2],[6.2,2.8,4.8,1.8,2],[6.1,3.0,4.9,1.8,2],[6.4,2.8,5.6,2.1,2],[7.2,3.0,5.8,1.6,2],[7.4,2.8,6.1,1.9,2],[7.9,3.8,6.4,2.0,2],[6.4,2.8,5.6,2.2,2],[6.3,2.8,5.1,1.5,2],[6.1,2.6,5.6,1.4,2],[7.7,3.0,6.1,2.3,2],[6.3,3.4,5.6,2.4,2],[6.4,3.1,5.5,1.8,2],[6.0,3.0,4.8,1.8,2],[6.9,3.1,5.4,2.1,2],[6.7,3.1,5.6,2.4,2],[6.9,3.1,5.1,2.3,2],[5.8,2.7,5.1,1.9,2],[6.8,3.2,5.9,2.3,2],[6.7,3.3,5.7,2.5,2],[6.7,3.0,5.2,2.3,2],[6.3,2.5,5.0,1.9,2],[6.5,3.0,5.2,2.0,2],[6.2,3.4,5.4,2.3,2],[5.9,3.0,5.1,1.8,2]];
+  var X = RAW.map(function (r) { return r.slice(0, 4); });
+  var Y = RAW.map(function (r) { return r[4]; });
+  var FEAT = ["Sepal length", "Sepal width", "Petal length", "Petal width"];
+  var SPECIES = ["setosa", "versicolor", "virginica"];
+  var NS = "http://www.w3.org/2000/svg";
+  var DEFAULT_SEED = 42;
+  var argmax = ML.argmax, mean = ML.mean;
+
+  function $(s) { return document.querySelector(s); }
+  function se(tag, attrs, parent) {
+    var e = document.createElementNS(NS, tag);
+    for (var k in attrs) e.setAttribute(k, attrs[k]);
+    if (parent) parent.appendChild(e);
+    return e;
+  }
+  function pct(p) { return p > 0 && p < 0.005 ? "<1%" : Math.round(p * 100) + "%"; }
+
+  var bounds = FEAT.map(function (_, j) {
+    var col = X.map(function (r) { return r[j]; });
+    return { min: Math.min.apply(null, col), max: Math.max.apply(null, col) };
+  });
+  var typical = SPECIES.map(function (_, c) {
+    return FEAT.map(function (__, j) {
+      var v = X.filter(function (___, i) { return Y[i] === c; }).map(function (r) { return r[j]; });
+      return Math.round(mean(v) * 10) / 10;
+    });
+  });
+
+  // ---------- state ----------
+  var seed = DEFAULT_SEED, exp = null, active = null;
+  var axes = { x: 2, y: 3 };
+  var vec = [5.9, 3.0, 5.1, 1.8];
+  var plot = null, grid = null, cells = [], cache = [], marker = null, lastW = 0;
+  var pending = false;
+
+  // ---------- controls ----------
+  var selX = $("#axX"), selY = $("#axY");
+  FEAT.forEach(function (n, j) {
+    [selX, selY].forEach(function (s) { var o = document.createElement("option"); o.value = j; o.textContent = n; s.appendChild(o); });
+  });
+  selX.value = axes.x; selY.value = axes.y;
+  selX.addEventListener("change", function () {
+    var nx = +selX.value;
+    if (nx === axes.y) axes.y = axes.x;
+    axes.x = nx; selY.value = axes.y;
+    if (exp) { renderPlot(); updateLive(); }
+  });
+  selY.addEventListener("change", function () {
+    var ny = +selY.value;
+    if (ny === axes.x) axes.x = axes.y;
+    axes.y = ny; selX.value = axes.x;
+    if (exp) { renderPlot(); updateLive(); }
+  });
+
+  var sliderEls = [], outEls = [];
+  FEAT.forEach(function (name, j) {
+    var row = document.createElement("div");
+    row.className = "slider";
+    row.innerHTML = '<label for="s' + j + '">' + name + '</label><output for="s' + j + '"></output>' +
+      '<input id="s' + j + '" type="range" min="' + bounds[j].min + '" max="' + bounds[j].max + '" step="0.1" value="' + vec[j] + '">';
+    $("#sliders").appendChild(row);
+    var input = row.querySelector("input");
+    sliderEls.push(input); outEls.push(row.querySelector("output"));
+    input.addEventListener("input", function () {
+      vec[j] = parseFloat(input.value);
+      outEls[j].textContent = vec[j].toFixed(1) + " cm";
+      $("#note").textContent = "";
+      schedule();
+    });
+  });
+  function syncSliders() {
+    vec.forEach(function (v, j) { sliderEls[j].value = v; outEls[j].textContent = v.toFixed(1) + " cm"; });
+  }
+  syncSliders();
+
+  SPECIES.forEach(function (s, c) {
+    var b = document.createElement("button");
+    b.type = "button"; b.className = "chip";
+    b.innerHTML = '<span class="dot c' + c + '"></span><span class="latin">' + s + '</span>';
+    b.addEventListener("click", function () {
+      vec = typical[c].slice(); syncSliders(); $("#note").textContent = "";
+      if (exp) updateLive();
+    });
+    $("#chips").appendChild(b);
+  });
+
+  $("#testflower").addEventListener("click", function () {
+    if (!exp) return;
+    var i = exp.test[Math.floor(Math.random() * exp.test.length)];
+    vec = X[i].slice(); syncSliders();
+    var k = argmax(exp.models[active].proba(vec)), t = Y[i];
+    $("#note").innerHTML = 'This held-out flower is really <span class="latin">' + SPECIES[t] + '</span>. The model says <span class="latin">' +
+      SPECIES[k] + '</span>, which is ' + (k === t ? "correct." : "wrong.");
+    updateLive();
+  });
+
+  function renderToggle() {
+    var box = $("#seg");
+    box.innerHTML = "";
+    Object.keys(exp.models).forEach(function (name) {
+      var b = document.createElement("button");
+      b.type = "button";
+      b.setAttribute("aria-pressed", String(name === active));
+      b.textContent = name + (name === exp.best ? " (best)" : "");
+      b.addEventListener("click", function () { active = name; renderToggle(); updateLive(); });
+      box.appendChild(b);
+    });
+  }
+
+  function schedule() {
+    if (pending || !exp) return;
+    pending = true;
+    requestAnimationFrame(function () { pending = false; updateLive(); });
+  }
+
+  // ---------- live prediction ----------
+  function updateLive() {
+    var model = exp.models[active];
+    var p = model.proba(vec), k = argmax(p);
+    $("#rlatin").textContent = "Iris " + SPECIES[k];
+    $("#swatch").style.background = "var(--c" + k + ")";
+    $("#rsure").textContent = pct(p[k]) + " sure";
+    var segs = $("#rbar").children;
+    for (var i = 0; i < 3; i++) segs[i].style.width = (p[i] * 100) + "%";
+    $("#probs").innerHTML = SPECIES.map(function (s, c) {
+      return '<li><span class="dot c' + c + '"></span><span class="latin">' + s + '</span><span class="num">' + pct(p[c]) + "</span></li>";
+    }).join("");
+    if (plot) { updateCells(model); updateMarker(); }
+  }
+
+  // ---------- plot ----------
+  function ticksFor(a, b) {
+    var step = (b - a) > 4 ? 1 : 0.5, out = [];
+    for (var v = Math.ceil(a / step) * step; v <= b + 1e-9; v += step) out.push(Math.round(v * 10) / 10);
+    return out;
+  }
+
+  function renderPlot() {
+    var host = $("#plot"), svg = $("#svg");
+    var W = Math.max(260, Math.floor(host.clientWidth));
+    var H = Math.round(Math.min(480, Math.max(250, W * (W < 520 ? 0.88 : 0.74))));
+    var m = { l: 46, r: 14, t: 12, b: 46 };
+    var iw = W - m.l - m.r, ih = H - m.t - m.b;
+    var fx = axes.x, fy = axes.y;
+    var dx = [bounds[fx].min - 0.3, bounds[fx].max + 0.3];
+    var dy = [bounds[fy].min - 0.3, bounds[fy].max + 0.3];
+    var sx = function (v) { return m.l + (v - dx[0]) / (dx[1] - dx[0]) * iw; };
+    var sy = function (v) { return m.t + ih - (v - dy[0]) / (dy[1] - dy[0]) * ih; };
+    plot = { W: W, H: H, m: m, iw: iw, ih: ih, sx: sx, sy: sy };
+    lastW = W;
+
+    svg.setAttribute("viewBox", "0 0 " + W + " " + H);
+    while (svg.firstChild) svg.removeChild(svg.firstChild);
+
+    // shaded decision regions
+    var NX = Math.max(12, Math.min(80, Math.round(iw / 8)));
+    var NY = Math.max(10, Math.min(56, Math.round(ih / 8)));
+    var cw = iw / NX, ch = ih / NY;
+    grid = { NX: NX, NY: NY, xs: [], ys: [] };
+    for (var c = 0; c < NX; c++) grid.xs.push(dx[0] + (c + 0.5) / NX * (dx[1] - dx[0]));
+    for (var r = 0; r < NY; r++) grid.ys.push(dy[1] - (r + 0.5) / NY * (dy[1] - dy[0]));
+    var gcells = se("g", {}, svg);
+    cells = []; cache = [];
+    for (r = 0; r < NY; r++) {
+      for (c = 0; c < NX; c++) {
+        cells.push(se("rect", { "class": "bg", x: (m.l + c * cw).toFixed(2), y: (m.t + r * ch).toFixed(2), width: (cw + 0.8).toFixed(2), height: (ch + 0.8).toFixed(2) }, gcells));
+      }
+    }
+
+    // grid lines, ticks, labels
+    var xt = ticksFor(dx[0], dx[1]), yt = ticksFor(dy[0], dy[1]);
+    xt.forEach(function (v) {
+      se("line", { "class": "gridline", x1: sx(v), x2: sx(v), y1: m.t, y2: m.t + ih }, svg);
+      var t = se("text", { "class": "tick", x: sx(v), y: m.t + ih + 17, "text-anchor": "middle" }, svg); t.textContent = v;
+    });
+    yt.forEach(function (v) {
+      se("line", { "class": "gridline", x1: m.l, x2: m.l + iw, y1: sy(v), y2: sy(v) }, svg);
+      var t = se("text", { "class": "tick", x: m.l - 8, y: sy(v) + 4, "text-anchor": "end" }, svg); t.textContent = v;
+    });
+    se("rect", { "class": "frame", x: m.l, y: m.t, width: iw, height: ih }, svg);
+    var xl = se("text", { "class": "axlab", x: m.l + iw / 2, y: H - 8, "text-anchor": "middle" }, svg); xl.textContent = FEAT[fx] + " (cm)";
+    var yl = se("text", { "class": "axlab", x: 13, y: m.t + ih / 2, "text-anchor": "middle", transform: "rotate(-90 13 " + (m.t + ih / 2) + ")" }, svg); yl.textContent = FEAT[fy] + " (cm)";
+
+    // flowers
+    var testSet = {}, wrong = {};
+    exp.test.forEach(function (i, n) { testSet[i] = true; if (exp.preds[n] !== Y[i]) wrong[i] = true; });
+    var pts = se("g", {}, svg);
+    X.forEach(function (row, i) {
+      if (testSet[i]) return;
+      se("circle", { "class": "pt pt-train c" + Y[i], cx: sx(row[fx]), cy: sy(row[fy]), r: 3.6, "fill-opacity": 0.9 }, pts);
+    });
+    X.forEach(function (row, i) {
+      if (!testSet[i]) return;
+      var x = sx(row[fx]), y = sy(row[fy]);
+      se("path", { "class": "pt pt-test c" + Y[i], d: "M" + x + "," + (y - 6.5) + " L" + (x + 6.5) + "," + y + " L" + x + "," + (y + 6.5) + " L" + (x - 6.5) + "," + y + "Z" }, pts);
+      if (wrong[i]) se("circle", { "class": "mis", cx: x, cy: y, r: 11 }, pts);
+    });
+
+    // your flower
+    var g = se("g", {}, svg);
+    marker = {
+      v: se("line", { "class": "mk-cross", y1: m.t, y2: m.t + ih }, g),
+      h: se("line", { "class": "mk-cross", x1: m.l, x2: m.l + iw }, g),
+      halo: se("circle", { "class": "mk-halo", r: 10 }, g),
+      ring: se("circle", { "class": "mk-ring", r: 10 }, g),
+      dot: se("circle", { "class": "mk-dot", r: 2.8 }, g)
+    };
+  }
+
+  function updateCells(model) {
+    var v = vec.slice(), i = 0;
+    for (var r = 0; r < grid.NY; r++) {
+      v[axes.y] = grid.ys[r];
+      for (var c = 0; c < grid.NX; c++) {
+        v[axes.x] = grid.xs[c];
+        var p = model.proba(v), k = argmax(p);
+        var cls = "bg c" + k + " o" + Math.min(3, Math.floor(p[k] * 4));
+        if (cache[i] !== cls) { cells[i].setAttribute("class", cls); cache[i] = cls; }
+        i++;
+      }
+    }
+  }
+
+  function updateMarker() {
+    var x = plot.sx(vec[axes.x]), y = plot.sy(vec[axes.y]);
+    marker.v.setAttribute("x1", x); marker.v.setAttribute("x2", x);
+    marker.h.setAttribute("y1", y); marker.h.setAttribute("y2", y);
+    ["halo", "ring", "dot"].forEach(function (k) { marker[k].setAttribute("cx", x); marker[k].setAttribute("cy", y); });
+  }
+
+  if (window.ResizeObserver) {
+    new ResizeObserver(function () {
+      if (!exp) return;
+      var w = Math.floor($("#plot").clientWidth);
+      if (w && Math.abs(w - lastW) > 1) { renderPlot(); updateLive(); }
+    }).observe($("#plot"));
+  }
+
+  // ---------- report ----------
+  function renderReport() {
+    var names = Object.keys(exp.cv);
+    $("#cvBody").innerHTML = names.map(function (n) {
+      var v = exp.cv[n], win = n === exp.best;
+      return '<tr' + (win ? ' class="win"' : "") + '><th scope="row">' + n + (win ? ' <span class="badge">Chosen</span>' : "") + '</th><td class="r">' + (v.mean * 100).toFixed(1) +
+        '%</td><td class="r">±' + (v.std * 100).toFixed(1) + "</td></tr>";
+    }).join("");
+
+    $("#examLead").textContent = "The winner, " + exp.best.toLowerCase() + ", predicts " + exp.test.length + " flowers it has never seen.";
+    $("#acc").textContent = (exp.accuracy * 100).toFixed(1) + "%";
+    $("#accSub").textContent = exp.correct + " of " + exp.test.length + " correct";
+
+    var h = '<thead><tr><th scope="col"><span class="sr">True species</span></th>' + SPECIES.map(function (s) { return '<th scope="col" class="latin">' + s + "</th>"; }).join("") + "</tr></thead><tbody>";
+    exp.cm.forEach(function (row, r) {
+      var sum = row.reduce(function (a, b) { return a + b; }, 0);
+      h += '<tr><th scope="row" class="latin">' + SPECIES[r] + "</th>";
+      row.forEach(function (n, c) {
+        var v = sum ? n / sum : 0;
+        var cls = (v >= 0.5 ? "hi " : "") + (n === 0 ? "zero " : "") + (r !== c && n > 0 ? "err" : "");
+        h += '<td class="num ' + cls + '" style="--v:' + v.toFixed(2) + '">' + n + "</td>";
+      });
+      h += "</tr>";
+    });
+    $("#cm").innerHTML = h + "</tbody>";
+
+    $("#pcBody").innerHTML = exp.perClass.map(function (p, c) {
+      return '<tr><th scope="row" class="latin" style="font-weight:400">' + SPECIES[c] + '</th><td class="r">' + p.precision.toFixed(2) + '</td><td class="r">' +
+        p.recall.toFixed(2) + '</td><td class="r">' + p.f1.toFixed(2) + '</td><td class="r">' + p.support + "</td></tr>";
+    }).join("");
+  }
+
+  // ---------- training ----------
+  function train(newSeed) {
+    seed = newSeed;
+    $("#trainMeta").textContent = "Training both models…";
+    $("#retrain").disabled = true;
+    setTimeout(function () {
+      var t0 = performance.now();
+      exp = ML.runExperiment(X, Y, seed);
+      var ms = Math.round(performance.now() - t0);
+      if (!active || !exp.models[active]) active = exp.best;
+      $("#trainMeta").textContent = "Split " + seed + ": 120 training flowers, 30 held back. Trained in " + ms + " ms.";
+      $("#reset").hidden = seed === DEFAULT_SEED;
+      $("#reset").textContent = "Back to split " + DEFAULT_SEED;
+      $("#retrain").disabled = false;
+      $("#note").textContent = "";
+      renderToggle(); renderPlot(); updateLive(); renderReport();
+    }, 30);
+  }
+
+  $("#retrain").addEventListener("click", function () {
+    var s;
+    do { s = 1 + Math.floor(Math.random() * 9000); } while (s === seed);
+    train(s);
+  });
+  $("#reset").addEventListener("click", function () { train(DEFAULT_SEED); });
+
+  train(DEFAULT_SEED);
+})();
+</script>
+</body>
+</html>
