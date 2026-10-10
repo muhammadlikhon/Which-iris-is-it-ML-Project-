@@ -1,2 +1,4 @@
 # Which-iris-is-it-ML-Project-
-End-to-end scikit-learn project that classifies iris species from four flower measurements: leak-free pipelines, cross-validated model comparison, a single held-out test evaluation, a CLI predictor, and an interactive in-browser demo.
+A small, end-to-end machine learning project that classifies iris flowers into three species (setosa, versicolor, virginica) from sepal and petal measurements. It shows a clean, reproducible workflow: a stratified train/test split, preprocessing and model wrapped in a scikit-learn Pipeline to avoid data leakage, logistic regression vs. random forest compared with 5-fold cross-validation, and the winner evaluated once on a held-out test set (~93% accuracy). The trained model can be used from the command line to get per-species probabilities.
+
+The repo also includes a dependency-free browser demo, “Which iris is it?”, which re-implements the pipeline in plain JavaScript. You can drag sliders to describe a flower, see the predicted species with confidence, explore decision regions, and inspect the confusion matrix and per-species precision, recall and F1.
